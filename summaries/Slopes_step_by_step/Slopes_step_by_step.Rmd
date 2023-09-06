@@ -1,0 +1,577 @@
+---
+title: 'Q: Is there is an increase in annual timescale synchrony of mosquitos?'
+subtitle: 'Step by Step documentation'
+author: Amy Bauer,
+date: last edited `r Sys.Date()`
+output:
+  github_document: default
+  rmarkdown::github_document: default
+---
+
+```{r libraries, echo = F, warning=F, message=F}
+library(wsyn)
+
+# libraries for data viz
+library(ggplot2)
+library(patchwork)
+```
+
+<details>
+
+<summary>Show code: load and prep <i>Cx. tarsalis</i> data</summary>
+
+```{r load and prep Cx tarsalis timeseries data, message=F, warning=F}
+
+times<-1:45
+
+############# cx tarsalis data ############# 
+
+dat<-as.matrix(read.csv("data/neon_cx_tarsalis.csv", header = T))
+dat2<-dat[,-1] ## removes tBin
+dat2<-dat2[,-3] ## removes JORN
+ 
+dat2<-t(dat2) # transpose data
+
+# clean data:  
+x<-cleandat(dat2,times,3)$cdat
+# 3: time series are (individually) linearly detrended and de-meaned, and variances are standardized to 1
+```
+
+</details>
+
+## Step by Step Instructions:
+
+<b>Note</b>: Previously shared results were generated using the `wpmf` function despite the instructions refering to `wmf` an object - reading the instructions, we originally thought this was necessary because of the 'aaft' preserved synchrony mentioned in Step 4.
+
+Upon reading the instructions again, we realized that this may have been a misunderstanding on our end, and Step 4 likely pertained to the `surrog()` function used to get surrogate data sets. Below, [Part I: wmf] will contain the results obtained using the `wmf` function, and [Part II: wpmf] will contain results of using the `wpmf` function.
+
+### Part I: wmf
+
+#### Step 1 mos wmf
+
+*If x is the wmf object for your mosquitos, x\$values should be a complex matrix for which Mod(x\$values) is what is plotted as the wmf*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Cx wmf}
+moswmf<-wmf(x,times = times)
+
+# get value matrix
+gwmf<-abs(moswmf$value)
+```
+
+</details>
+
+##### wmf plot:
+
+```{r Cx wmf plot syn, echo=F}
+plotmag(moswmf)
+```
+
+##### Details:
+
+<details>
+
+<summary>Show synchrony value matrix</summary>
+
+```{r, echo=F}
+knitr::kable(gwmf)
+```
+
+</details>
+
+#### Step 2 mos wmf timescale
+
+*Extract either 12-month timescale (or whatever timescale is closest) as a function of time, OR the average across 8-14 months. This is synchrony at or near the annual timescale, as a function of time.*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Cx wmf extract timescales}
+# 12 month time scale
+gwmf12<-gwmf[12,]
+gwmf12<-gwmf12[-46]
+
+# 8-14 month timescales average
+gwmf8_14<-colMeans(gwmf[8:14,], na.rm = T)
+gwmf8_14<-gwmf8_14[-46]
+```
+
+</details>
+
+##### Details:
+
+<details>
+
+<summary>Show extracted values</summary>
+
+12 month values:
+
+```{r Cx wmf 12m timescales}
+gwmf12
+```
+
+8-14 month average values
+
+```{r Cx wmf 8-14m timescales}
+gwmf8_14
+```
+
+</details>
+
+#### Step 3 mos wmf slope
+
+*Regress (linear) against time, take the slope call it slope_real*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Cx wmf slopes}
+# 12 month time scale
+out1<-lm(gwmf12 ~ times)
+slope_real<- out1$coefficients[2]
+
+# 8-14 month timescales average
+out2<-lm(gwmf8_14 ~ times)
+slope_real2 <- out2$coefficients[2]
+
+slopes_wmf <- cbind(slope_real, slope_real2)
+```
+
+</details>
+
+##### real slopes
+
+`r knitr::kable(slopes_wmf)`
+
+#### Step 4 generate surrogates
+
+*Get synchrony preserving aaft surrogates of your mosquito data*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Surr data generation}
+## Get synchrony preserving aaft surrogate data of your mosquito data
+nsurrogs <- 1 # for code check
+surrtype <- "aaft"
+syncpres <- TRUE
+sur <- surrog(x,nsurrogs,surrtype,syncpres)
+
+# with x being the prep. mosquito data:
+
+    # dat<-as.matrix(read.csv("neon_cx_tarsalis.csv", header = T))
+    # dat2<-dat[,-1]
+    # dat2<-dat2[,-3]
+    # dat2<-t(dat2)
+    # x<-cleandat(dat2,times,3)$cdat
+
+## this is a demo of the used code, we generated 10,000 surr data sets using a looped setup
+```
+
+</details>
+
+#### Step 5 sur wmf slope
+
+*Repeat steps 2 and 3 for that, getting slope_surrog[1]*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Get sur wmf slopes}
+
+df_slope_wmf <- data.frame(matrix(nrow = 0, ncol = 2))
+colnames(df_slope_wmf) <- c("slope_surrog","slope_surrog2")
+
+for (i in sur) {
+  
+  # surrogate data
+  x <- i 
+  
+  # times<-1:45
+
+  moswmf_s<-wmf(x,times = times)
+  
+  gwmfs<-abs(moswmf_s$value)
+  
+  # get timeseries values:
+  
+  gwmfs12<-gwmfs[12,] 
+  gwmfs12<-gwmfs12[-46] 
+  
+  gwmfs8_14<-colMeans(gwmfs[8:14,], na.rm = T)
+  gwmfs8_14<-gwmfs8_14[-46]
+  
+  # get slopes:
+  
+  out1s<-lm(gwmfs12 ~ times)
+  slope_surrog <- out1s$coefficients[2]
+  
+  out2s<-lm(gwmfs8_14 ~ times)
+  slope_surrog2 <- out2s$coefficients[2]
+  
+  slopes2 <- cbind(slope_surrog, slope_surrog2)
+  df_slope_wmf <- rbind(df_slope_wmf, slopes2)
+  
+}
+
+```
+
+</details>
+
+##### surrogate[1] slopes:
+
+`r knitr::kable(df_slope_wmf)`
+
+#### Step 6
+
+*Repeat 9999 times, to get slope_surrog[2] through slope_surrog[10000]*
+
+<b>Note:</b> Used a loop for this, following the code above
+
+#### Step 7 wmf histogram
+
+*Make a histogram of slope_surrog -should cluster around 0. Plot the values slope_real on this histogram and see where it sits. If it's way out in the right tail, there's a significant increase in annual-timescale synchrony for this system*
+
+##### histogram
+
+```{r, echo =F, warning=F, message=F}
+## 
+slp_Swmf <- read.csv("output/surr_slopes/wmf_Surrogate_slopes_aaft_10000_140524.csv", stringsAsFactors = F)
+rslp_12_wmf <- slopes_wmf[1,2]
+
+h1a <- ggplot(slp_Swmf, aes(slope_surrog))+
+  geom_histogram(fill="lavenderblush4", alpha=.8) +
+  geom_vline(xintercept=0, linewidth = 0.5, linetype = 2, color = "black") + 
+  geom_vline(xintercept=slopes_wmf[1,1], linewidth = 1, color = "orangered3") +
+  labs(title = 'wmf()', 
+       subtitle="12 month timescale") +
+  theme_bw() 
+
+h1b <- ggplot(slp_Swmf, aes(slope_surrog2))+
+  geom_histogram(fill="lavenderblush4", alpha=.8) +
+  geom_vline(xintercept=0, linewidth = 0.5, linetype = 2, color = "black") + 
+  geom_vline(xintercept=slopes_wmf[1,2], linewidth = 1, color = "orangered3") +
+  labs(subtitle="8-14 month avg. timescale") +
+  theme_bw() 
+
+h1a + h1b
+```
+
+The dashed line is drawn at x=0.0, the red line represents the real slope for the mosquito data for the respective timescale (wmf)
+
+#### Step 8 wmf sur sample
+
+*Plot the wmf of one of the surrogate datasets to make sure it looks like the wmf of the real data but "evened out" over time. The timescale structure should be preserved, more or less. Also the total synchrony.*
+
+<b>Note</b>: Taking a look at the example surrogate data generated in [Step 5 sur wmf slope]
+
+##### Compare surrogate (left) and mosquito (right) wmf plots side by side:
+
+```{r, figures-side, fig.show="hold", out.width="50%", echo=F}
+par(mar = c(4, 4, .1, .1))
+plotmag(moswmf_s)
+plotmag(moswmf)
+```
+
+```{r Cx wmf plot syn for comparison, include=F}
+plotmag(moswmf)
+```
+
+##### Details:
+
+<details>
+
+<summary>Show surrogate data wmf plot</summary>
+
+```{r, echo=F}
+plotmag(moswmf_s)
+```
+
+</details>
+
+<details>
+
+<summary>Show surrogate data synchrony value matrix</summary>
+
+```{r, echo=F}
+knitr::kable(gwmfs)
+```
+
+</details>
+
+<details>
+
+<summary>Show extracted values for 12 month and 8-14 month timescales</summary>
+
+12 month values:
+
+```{r Sur wmf 12m timescales}
+gwmfs12
+```
+
+8-14 month average values
+
+```{r Sur wmf 8-14m timescales}
+gwmfs8_14
+```
+
+</details>
+
+### Part II: wpmf
+
+#### Step 1 mos wpmf
+
+*If x is the wmf object for your mosquitos, x\$values should be a complex matrix for which Mod(x\$values) is what is plotted as the wmf*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Cx wpmf}
+moswpmf<-wpmf(x,times = times,sigmethod = "aaft")
+
+# get value matrix
+gwpmf<-abs(moswpmf$value)
+```
+
+</details>
+
+##### wpmf plot:
+
+```{r Cx wpmf plot syn, echo=F}
+plotmag(moswpmf)
+```
+
+##### Details:
+
+<details>
+
+<summary>Show synchrony value matrix</summary>
+
+```{r, echo=F}
+knitr::kable(gwpmf)
+```
+
+</details>
+
+#### Step 2 mos wpmf timescale
+
+*Extract either 12-month timescale (or whatever timescale is closest) as a function of time, OR the average across 8-14 months. This is synchrony at or near the annual timescale, as a function of time.*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Cx wpmf extract timescales}
+# 12 month time scale
+gwpmf12<-gwpmf[12,]
+gwpmf12<-gwpmf12[-46]
+
+# 8-14 month timescales average
+gwpmf8_14<-colMeans(gwpmf[8:14,], na.rm = T)
+gwpmf8_14<-gwpmf8_14[-46]
+```
+
+</details>
+
+##### Details:
+
+<details>
+
+<summary>Show extracted values</summary>
+
+12 month values:
+
+```{r Cx wpmf 12m timescales}
+gwpmf12
+```
+
+8-14 month average values
+
+```{r Cx wpmf 8-14m timescales}
+gwpmf8_14
+```
+
+</details>
+
+#### Step 3 mos wpmf slope
+
+*Regress (linear) against time, take the slope call it slope_real*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Cx wpmf slopes}
+# 12 month time scale
+out1<-lm(gwpmf12 ~ times)
+slope_real<- out1$coefficients[2]
+
+# 8-14 month timescales average
+out2<-lm(gwpmf8_14 ~ times)
+slope_real2 <- out2$coefficients[2]
+
+slopes_wpmf <- cbind(slope_real, slope_real2)
+```
+
+</details>
+
+##### real slopes
+
+`r knitr::kable(slopes_wpmf)`
+
+#### [Step 4 generate surrogates]
+
+<b>Note</b>: we're using surrogate[1] data generated above (wmf Step 4).
+
+#### Step 5 sur wpmf slope
+
+*Repeat steps 2 and 3 for that, getting slope_surrog[1]*
+
+<details>
+
+<summary>Show code</summary>
+
+```{r Get sur wpmf slopes}
+
+df_slope_wpmf <- data.frame(matrix(nrow = 0, ncol = 2))
+colnames(df_slope_wpmf) <- c("slope_surrog","slope_surrog2")
+
+for (i in sur) {
+  
+  # surrogate data
+  x <- i 
+  
+  # times<-1:45
+
+  moswpmf_s<-wpmf(x,times = times,sigmethod = "aaft")
+  
+  gwpmfs<-abs(moswpmf_s$value)
+  
+  # get timeseries values:
+  
+  gwpmfs12<-gwpmfs[12,] 
+  gwpmfs12<-gwpmfs12[-46] 
+  
+  gwpmfs8_14<-colMeans(gwpmfs[8:14,], na.rm = T)
+  gwpmfs8_14<-gwpmfs8_14[-46]
+  
+  # get slopes:
+  
+  out1s<-lm(gwpmfs12 ~ times)
+  slope_surrog <- out1s$coefficients[2]
+  
+  out2s<-lm(gwpmfs8_14 ~ times)
+  slope_surrog2 <- out2s$coefficients[2]
+  
+  slopes2 <- cbind(slope_surrog, slope_surrog2)
+  df_slope_wpmf <- rbind(df_slope_wpmf, slopes2)
+  
+}
+
+```
+
+</details>
+
+##### surrogate[1] slopes
+
+`r knitr::kable(df_slope_wpmf)`
+
+#### Step 6
+
+*Repeat 9999 times, to get slope_surrog[2] through slope_surrog[10000]*
+
+<b> Note: </b> Used a loop for this, following the code above
+
+#### Step 7 wpmf histogram
+
+*Make a histogram of slope_surrog -should cluster around 0. Plot the values slope_real on this histogram and see where it sits. If it's way out in the right tail, there's a significant increase in annual-timescale synchrony for this system*
+
+```{r, echo =F, warning=F, message=F}
+## 
+slp_Swpmf <- read.csv("output/surr_slopes/Surr_slopes_aaft_10k.csv", stringsAsFactors = F)
+
+h2a <- ggplot(slp_Swpmf, aes(surSlp12))+
+  geom_histogram(fill="lightsteelblue4", alpha=.8) +
+  geom_vline(xintercept=0, linewidth = 0.5, linetype = 2, color = "black") + 
+  geom_vline(xintercept=slopes_wpmf[1,1], linewidth = 1, color = "blue4") +
+  labs(title = 'wpmf()', 
+       subtitle="12 month timescale") +
+  theme_bw() 
+
+h2b <- ggplot(slp_Swpmf, aes(surSlp8_14))+
+  geom_histogram(fill="lightsteelblue4", alpha=.8) +
+  geom_vline(xintercept=0, linewidth = 0.5, linetype = 2, color = "black") + 
+  geom_vline(xintercept=slopes_wpmf[1,2], linewidth = 1, color = "blue4") +
+  labs(subtitle="8-14 month avg. timescale") +
+  theme_bw() 
+
+h2a + h2b
+```
+
+The dashed line is drawn at x=0.0, the blue line represents the real slope for the mosquito data for the respective timescale (wpmf)
+
+#### Step 8 wpmf sur sample
+
+*Plot the wmf of one of the surrogate datasets to make sure it looks like the wmf of the real data but "evened out" over time. The timescale structure should be preserved, more or less. Also the total synchrony.*
+
+<b>Note</b>: Taking a look at the example surrogate data generated in [Step 5 sur wpmf slope]
+
+##### Compare surrogate (left) and mosquito (right) wpmf plots side by side:
+
+```{r, figures-side2, fig.show="hold", out.width="50%", echo=F}
+par(mar = c(4, 4, .1, .1))
+plotmag(moswpmf_s)
+plotmag(moswpmf)
+```
+
+```{r Cx wmpf plot syn for comparison, include=F}
+plotmag(moswpmf)
+```
+
+##### Details:
+
+<details>
+
+<summary>Show surrogate data wpmf plot</summary>
+
+```{r, echo=F}
+plotmag(moswpmf_s)
+```
+
+</details>
+
+<details>
+
+<summary>Show surrogate data synchrony value matrix</summary>
+
+```{r, echo=F}
+knitr::kable(gwpmfs)
+```
+
+</details>
+
+<details>
+
+<summary>Show extracted values for 12 month and 8-14 month timescales</summary>
+
+12 month values:
+
+```{r Sur wpmf 12m timescales}
+gwpmfs12
+```
+
+8-14 month average values
+
+```{r Sur wpmf 8-14m timescales}
+gwpmfs8_14
+```
+
+</details>

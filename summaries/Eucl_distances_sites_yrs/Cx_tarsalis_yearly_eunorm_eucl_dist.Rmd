@@ -1,0 +1,147 @@
+---
+title: 'Checking distances within years'
+author: Amy Bauer,
+date: last edited `r Sys.Date()`
+output:
+  github_document: default
+  rmarkdown::github_document: default
+---
+
+```{r read libraries, include= F}
+
+library(tidyverse)
+library(distances) # distances() function - for eucl distances between sites
+library(gtools)   # combinations() function
+library(reshape2) # for melt() function - melts matrix into long format df
+library(viridis)
+```
+
+### Step by Step Instructions:
+
+```{r prep data, echo = F, message=F, warning=F}
+# read data files:
+## monthly cumulative precipitation values - has date information
+p.c <- read.csv("figures/manuscript_fig/acc_prec_for_wsyn_times_45.csv")
+## Culex tarsalis data
+mos <- read.csv("figures/manuscript_fig/neon_data_mmpth_cxtar_sites_tbin_wide_red_13_jun_23_filled.csv")
+
+######### Prepare data  #########
+
+## transform to long format:
+p.c2 <- p.c %>% pivot_longer(c(CLBJ:WOOD), names_to = "site", values_to = "prcp_cum")
+mos3 <- mos %>% 
+  select(-c(JORN)) %>% 
+  pivot_longer(c(CLBJ:WOOD), names_to = "site", values_to = "mpth")
+
+## combine data into one df
+dat <- left_join(p.c2, mos3) %>% 
+  select(year, month, site, mpth)
+
+# all unique sites
+us <- data.frame(site = unique(dat$site)) %>%   
+  mutate(sNr = row_number())
+
+# join back to data
+dat <- left_join(dat, us)
+
+# get all unique combinations between sites (order does not matter)
+s_comb <- combinations(n = length(us$sNr), # size of source vector 
+                       r = 2, # size of target vector (all possible combinations of n variables)
+                       v = unique(us$sNr), # pool of variables (included variables)
+                       repeats.allowed = FALSE) %>% # each var is unique in pool, no replacements 
+  as.data.frame()
+```
+
+1.  Pick some months that represent the summer (by which I actually mean the mosquito period). Say, May-August, but you should choose months that make sense given your knowledge of the data and biology. Suppose you pick N months to represent the mosquito period. BTW these need to be the same months for all locations, so pick a big enough window to embrace the activity in all locations.
+
+  *-> see plots at end of document*
+
+```{r get annual values, message=F, warning=F}
+########### Loop through years #########
+
+# define start and end month: period of activity
+firstm <- 4
+lastm <- 9
+
+# get all unique years
+yr.vars <- unique(dat$year)
+
+# data frame to annual values:
+all_avg <- data.frame(matrix(ncol = 2, nrow = 0))
+colnames(all_avg) <- c("avg_EuDist", "year")
+```
+
+2.  For each site and year, you therefore get a length-N vector of mosquito abundances for the summer. Normalize each by dividing by its Euclidean norm (root mean square of the entries). Let nv(s,y) denote this normalized vector for site s and year y.
+3.  A measure of intraseasonal synchrony for a year, y, would be to take all pairs of *distinct* sites, s1 and s2 and compute the Euclidean distance between nv(s1,y) and nv(s2,y). Then average these quantities across all pairs of distinct sites.
+
+```{r get annual values loop, message=F, warning=F}
+
+for(yr in yr.vars){
+
+  m <- dat %>% 
+    filter(year == yr) %>% 
+    filter(month >= firstm) %>% 
+    filter(month <= lastm) %>% 
+    group_by(site) %>% 
+    summarize(nv = norm(mpth, type = "2")) %>%  
+                   # euclid. norm nv = sqrt(sum(mpth^2))
+    select(nv) %>% 
+    as.data.frame() %>% 
+    distances() %>% # From distances() documentation:
+                    #   Euclidean distances
+                    #   my_distances1 <- distances(my_data_points)
+    distance_columns(1:9) 
+  
+  # melt matrix into long-format df
+  long <- melt(m) %>% rename(V1 = Var1, V2 = Var2) 
+  
+  # left join to df containing unique site combinations only:
+  avg_y <- left_join(s_comb, long) %>% 
+    summarize(avg_EuDist = mean(value)) %>% 
+    mutate(year = yr)
+  
+  all_avg <- rbind(all_avg, avg_y)
+}
+
+write.csv(all_avg, "output/Cx_tarsalis_annual_avg_eucl_dist.csv", row.names = F)
+```
+
+```{r annual values, echo = F, warning=F, message=F}
+knitr::kable(all_avg, position="left")
+```
+
+*4.To determine if this is significant compared to a null hypothesis of no phenology whatsoever in mosquito abundances, proceed as follows. For each s and y, randomize the order of the N entries in the normalized vector nv(s,y). Then recompute 3 above (whichever of the two metrics in 3 you choose, you have to use the same metric, here, too) to get a surrogate value. Repeat 10000 times to get a distribution of surrogate values. The p-value is the fraction of surrogate values smaller (for metric 1) or larger (form metric 2) than the value computed in 3. Repeat the whole process for each year.*
+
+___
+___
+
+#### Checking monthly mpth across the 9 sites, 2016-2019
+
+All 9 sites:
+
+```{r plot yearly mpth by site over month I, echo=F}
+# plot mpth at sites over months
+ggplot(dat, aes(month, mpth, fill=site)) +
+  geom_col(color = "black", linewidth=0.7, alpha = 0.8) +
+  facet_wrap(~ year) +
+  scale_fill_viridis(begin = 0,end = 0.95, discrete = TRUE, option = "C") +
+  scale_x_continuous(breaks = seq(1, 12, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+
+#theme(legend.position = "none")
+```
+
+Removing site "OAES" because of the much higher mosquito counts:
+
+```{r plot yearly mpth by site over month II, echo=F}
+dat2 <- dat %>% filter(site != "OAES")
+# plot mpth at sites over months
+ggplot(dat2, aes(month, mpth, fill=site)) +
+  geom_col(color = "black", linewidth=0.7, alpha = 0.8) +
+  facet_wrap(~ year) +
+  scale_fill_viridis(begin = 0,end = 0.95, discrete = TRUE, option = "D") +
+  scale_x_continuous(breaks = seq(1, 12, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+
+  #theme(legend.position = "none")
+```
