@@ -88,53 +88,57 @@ for(f in input.files){
 }
 
 #########################################################
-### Set up wavelet linear models (wlm)
+### prep for wavelet linear models (wlm)
 
+## wlm()
 # define timesteps
 times <- 1:45
 # clean data
 dat <- lapply(FUN=function(x){cleandat(x,times,3)$cdat},X=dat)
 
-# generate wlm object:
+# define wlm structure
 resp <- 1
-pred <- 2:6  
+pred <- 2:6 # will loop through these 
 norm <- "powall"
 
-dat.wlm <- wlm(dat, times, resp, pred, norm)
+## wlmtest()
+# define nrand
+n <- 10000
+sigmethod <- "aaft"
 
-
-##################################################################################
-### compare wlm - test for significant relationship between response and predictor
-
+## bandtest() 
 # timescale of interest
 blong<-c(11,13) # ~annual timescale, 11-13 months
 
 res.list <- list()
 
-# wlmtest for each environmental variable: 
-for(i in pred){
-  
-  drop <- pred[!pred %in% i] 
-  
+### ### ### ### ### ### ### ### ###
+### define wlm & test for significant relationship between response and predictor
+
+# fit and test wlm for each environmental variable:
+# res represents the significance of the variable dropped (!!!)
+
+for(p in pred){
   # control:
-  cat("env. predictor:", i, "\n", sep = " ")
-  cat("drop:", drop, "\n", sep = " ")
+  cat("env. predictor:", p, "\n", sep = " ")
   
-  sigmethod<-"aaft"
-  n = 100 # should at least be 1000, better 10000
+  # define wlmobj
+  dat.wlm <- wlm(dat, times, resp, p, norm)
+  (print)
   
-  res <- wlmtest(dat.wlm, drop, sigmethod, nrand= n)
+  # wlmtest
+  res <- wlmtest(dat.wlm, drop = 2, sigmethod, nrand= n) # drop dat.wlm$dat[2], i.e. the env covariate
   res <- bandtest(res, blong)
-  
-  k <- env[i-1]
-  
+
+  k <- env[p-1]
+
   # saves plotrank plots in the out folder
-  plotrank(res, 
+  plotrank(res)
+  plotrank(res,
            filename = file.path(outDir, str_c("cxtar_wlmtest_", k, "_", n, sep = "")))
-  
-  
+
   res.list[[k]] <- res
-    if(i == last(pred)){saveRDS(res.list, file.path(outDir, "cxtar_wsyn45_wlmtest.RDS"))}
-  
+    if(p == last(pred)){saveRDS(res.list, file.path(outDir, "cxtar_wsyn45_wlmtest.RDS"))}
+
 }
 
