@@ -1,0 +1,747 @@
+---
+title: 'Broadscale spatial synchrony in a West Nile virus mosquito vector across multiple timescales'
+subtitle: 'Documentation of analyses'
+date: last edited "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    theme: flatly
+    highlight: pygments
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+### Preparation
+
+```{r libraries, warning=F, message=F}
+### LOAD LIBRARIES ###
+library(tidyverse)
+library(wsyn)
+library(stringr)
+library(doParallel) # for paralell processing of surrogate slopes
+
+# libraries for data viz
+library(ggplot2)
+library(patchwork)
+library(viridis)
+```
+
+```{r, echo = F}
+### SET DIRECTORIES ###
+#getwd()
+
+# define directories
+workDir <- file.path(".")
+datDir <- file.path(workDir, "data")
+inDir <- file.path(datDir, "input")
+outDir <- file.path(datDir, "output")
+if(!dir.exists(outDir)){dir.create(outDir)}
+```
+
+```{r set seed}
+# to make analyses reproducible
+set.seed(1)
+```
+
+------------------------------------------------------------------------
+
+## Prepare data for analyses
+
+### *Culex tarsalis* data
+
+*Culex tarsalis* data ready for spatial wavelet analyses.
+Surveillance records were binned into continuous monthly bins (`tBin`), and mean number of mosquitoes per trap hour per month (mmpth) was calculated for each of the included NEON surveillance sites.
+`NA` values were then replaced with `0` in preparation of the analyses.
+
+```{r load culex data non-transformed, echo = F}
+cx <- read.csv(file.path(inDir, "cx_tar_16_19_13jan24.csv"), stringsAsFactors = F)
+```
+
+```{r print culex data non-transformed, echo = F}
+knitr::kable(cx, digits = 4)
+```
+
+```{r NEON temporal coverage plot, warning = F, echo = F, eval = F, include = F}
+viz <- read.csv(file.path(inDir, "cx_tar_16_21_sites_6to18h_mmpth_tbin_long.csv"), stringsAsFactors = F)
+
+viz <- viz %>% 
+  filter(tBin >= 4 & tBin <= 48) %>% 
+  filter(!is.na(siteID)) %>% 
+  mutate(date = as.Date(paste(year, month, "01", sep = "-")))
+
+ggplot(viz, aes(x = date, y = siteID, fill = mmpth)) +
+  geom_tile() +
+  scale_y_discrete(name = "NEON Site") +
+  scale_x_date(
+    limits = as.Date(c("2016-04-01", "2019-12-28")), 
+               date_breaks = "2 months", date_labels = "%b %Y") +
+  scale_fill_viridis(option = "H", na.value = "transparent") + #labs(x = "time", y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0)) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(unique(viz$year), "-01-01"))), 
+             linetype = "dotted", color = "gray40")
+```
+
+### Load and transpose data
+
+```{r}
+# list of environmental variables included in analyses
+env <- c("prec", "tmin", "tmax", "rmin", "rmax") 
+
+
+### Prepare data for analyses
+
+dat.list <- list() # store all data in this list
+
+# pattern in env. variable data file names
+p <- "_for_wsyn_times_45.csv"
+
+# list all data files in data folder:
+input.files <- list.files(inDir, pattern = ".csv")
+input.files
+
+## loop through all files
+# remove unnecessary columns, transpose & save as matrix objects in the dat.list list
+
+for(f in input.files){
+  
+  # load data
+  d <- read.csv(file.path(inDir, f))
+  
+  # if file = species data
+  if(str_detect(f, "cx_tar")){
+    
+    v.name <- "cx_tar"
+    
+    d1 <- d %>% 
+      arrange(tBin) %>% select(-c(tBin)) %>% t() 
+    
+    dat.list[[v.name]] <- d1
+  }
+  
+  # if file = env data
+  if(str_detect(f, p)){
+    
+    v.name <- f %>% str_remove(p) %>% word(-1, sep = "_")
+
+    d1 <- d %>% 
+      arrange(tBin) %>% select(-c(year, month, tBin)) %>% t() 
+    
+    dat.list[[v.name]] <- d1
+  }
+  
+  # save data as .RDS object
+  if(f == last(input.files)){
+    
+    # rearrange list objects:
+    dat <- dat.list[c("cx_tar", env)] 
+    saveRDS(dat, file.path(inDir, "cxtar_wsyn45_data.RDS"))
+    
+    }
+}
+```
+
+```{r, echo = F}
+rm(list = c("d", "d1", "dat.list", "p"))
+```
+
+### Prepare for synchrony analyses
+
+To prepare the data for subsequent analyses, the monthly *Cx. tarsalis* and environmental variable timeseries are each de-meaned, detrended, and variances are standardized to 1 using `wsyn::cleandat()` with `clev==3`.
+
+```{r}
+# define timesteps
+times <- 1:45
+
+# clean spatio-temporal data
+dat <- lapply(FUN=function(x){cleandat(x,times,3)$cdat},X=dat)
+```
+
+# Wavelet phasor mean fields
+
+Wavelet phasor mean fields (wpmf, `wsyn::wpmf()`) are computed with `sigmethod = "aaft"` to quantify whether significant spatial synchrony occurred at one or more timescales for monthly *Cx. tarsalis* mmpth and the 5 included environmental variables each.
+
+```{r}
+# method for significance testing in wsyn::wpmf()
+sigmethod <- "aaft"
+```
+
+## *Culex tarsalis* wpmf {.tabset}
+
+```{r wpmf cx tarsalis, results='hide', message=F, warning=F, cache = T}
+# compute cx tarsalis wpmf
+moswpmf <- wpmf(dat$cx_tar, times = times, sigmethod = sigmethod)
+
+# get matrix of computed values:
+gwpmf <- abs(moswpmf$value)
+
+# save wpmf plot
+plotmag(moswpmf, 
+        filename = file.path(outDir, str_c("cx_tar_16_19_wpmf_", sigmethod, sep = "")))
+```
+
+### plot
+
+```{r wpmf cx tarsalis plot syn, echo=F, message = F, fig.align = 'center'}
+plotmag(moswpmf, title = "wpmf Culex tarsalis")
+```
+
+### matrix
+
+```{r wpmf cx tarsalis syn matrix, echo=F, rows.print=45}
+as.data.frame(gwpmf)
+```
+
+###  {.unnumbered}
+
+```{r wpmf cx tarsalis syn matrix knitr, echo=F}
+#knitr::kable(gwpmf, digits = 4)
+```
+
+## Environmental wpmf
+
+```{r wpmf environmental vars, eval = F}
+env_wpmf <- list()
+
+for(p in env){
+  
+  dat2 <- dat[[p]]
+  
+  e_wpmf <- wpmf(dat2, times = times, sigmethod = sigmethod)
+  env_wpmf[[p]] <- e_wpmf
+  
+  # save plot
+  plotmag(e_wpmf, 
+        filename = file.path(outDir, str_c("env_", p, "_16_19_wpmf_", sigmethod, sep = "")))
+
+  if(p == last(env)){saveRDS(env_wpmf, file.path(outDir, "env_wsyn45_wlmtest.RDS"))}
+} 
+
+```
+
+```{r wpmf env syn plots, echo=FALSE, out.width="50%", fig.show="hold", fig.align="default"}
+env_wpmf <- readRDS(file.path(outDir, "env_wsyn45_wlmtest.RDS"))
+
+plotmag(env_wpmf$tmin, title = "wpmf Avg Min Temp")
+plotmag(env_wpmf$tmax, title = "wpmf Avg Max Temp")
+plotmag(env_wpmf$rmin, title = "wpmf Avg Min VPD")
+plotmag(env_wpmf$rmax, title = "wpmf Avg Max VPD")
+plotmag(env_wpmf$prec, title = "wpmf Cum Prec")
+```
+
+# Univariate wavelet linear models {.tabset}
+
+To quantify whether spatial synchrony in a given climate variable is a significant predictor of spatial synchrony in *Cx. tarsalis* abundance at the same timescale, univariate wavelet linear models (wlm) are fitted with `wsyn::wlm()` and assessed using `wsyn::wlmtest()`, `wsyn::bandtest()` and `wsyn::plotrank()`.
+
+```{r wlm wlmtest function parameters}
+# define parameters for functions used in this step:
+
+## wsyn::wlm()
+resp <- 1         # index of response variable
+pred <- 2:6       # index of predictor variable
+norm <- "powall"  # normalization of wavelet transforms to use
+
+## wsyn::wlmtest()
+n <- 10000        # nrand
+
+## wsyn::bandtest() 
+blong<-c(10,12)   # timescale of interest, i.e., ~ annual timescale, 10 to 12 months
+```
+
+```{r wlm wlmtest for significant relationship, eval = F}
+### define wlm & test for significant relationship between response and predictor
+# res = the significance of the variable dropped 
+
+res.list <- list()
+
+for(p in pred){
+  
+  # control:
+  cat("env. predictor:", p, "\n", sep = " ")
+  
+  # define wlmobj
+  dat.wlm <- wlm(dat, times, resp, p, norm)
+  (print)
+  
+  # wlmtest
+  res <- wlmtest(dat.wlm, drop = 2, sigmethod, nrand= n) # drop dat.wlm$dat[2], i.e. the env covariate
+  res <- bandtest(res, blong)
+
+  k <- env[p-1] # get the variable name
+  
+
+  # saves plotrank plots in output folder
+  plotrank(res,
+           filename = file.path(outDir, str_c("cxtar_wlmtest", sigmethod, n, k, sep = "_")))
+  
+  # store in list
+  res.list[[k]] <- res
+  
+    if(p == last(pred)){saveRDS(res.list, file.path(outDir, "cxtar_wsyn45_wlmtest.RDS"))}
+
+}
+
+```
+
+## p-value summary
+
+```{r, echo = F}
+res.list <- readRDS(file.path(outDir, "cxtar_wsyn45_wlmtest.RDS"))
+
+env.sig <- data.frame()
+
+for(k in 1:length(res.list)){
+  
+  res <- res.list[k]
+
+  env_var <- names(res)
+  p_value <- res[[env_var]]$bandp$p_val
+  
+  p <- data.frame(env_var = env_var, 
+                  p_value = p_value, 
+                  sigmethod = sigmethod,
+                  nrand = n)
+  env.sig <- rbind(env.sig, p)
+}
+
+env.sig <- env.sig %>% arrange(p_value)
+
+# save summary of p-values
+write.csv(env.sig, file.path(outDir, str_c("cxtar_wsyn45_wlmtest", sigmethod, n, "pvalues.csv", sep="_")), row.names = F)
+```
+
+```{r echo = F}
+env.sig <- env.sig %>% 
+  mutate(p_value = round(p_value, 4))
+
+knitr::kable(env.sig, format = "html", table.attr = "style='width:75%;'")
+```
+
+```{r echo = F}
+# list of (marginally) significant env. variables
+env.sig <- env.sig %>% filter(p_value <= 0.15) %>% pull(env_var)
+```
+
+```{r wlm wlmtest for significant relationship plot, echo=FALSE, include=FALSE, results='hide', out.width="50%", fig.show="hold", fig.align="default"}
+
+plotrank(res.list$tmin)
+plotrank(res.list$tmax)
+plotrank(res.list$rmin)
+plotrank(res.list$rmax)
+plotrank(res.list$prec)
+```
+
+## plot tmin
+
+```{r, echo=F, results='hide'}
+cat("Environmental variable: tmin")
+plotrank(res.list$tmin)
+```
+
+## plot tmax
+
+```{r, echo=F, results='hide'}
+cat("Environmental variable: tmax")
+plotrank(res.list$tmax)
+```
+
+## plot rmin
+
+```{r, echo=F, results='hide'}
+cat("Environmental variable: rmin")
+plotrank(res.list$rmin)
+```
+
+## plot rmax
+
+```{r, echo=F, results='hide'}
+cat("Environmental variable: rmax")
+plotrank(res.list$rmax)
+```
+
+## plot prec
+
+```{r, echo=F, results='hide'}
+cat("Environmental variable: prec")
+plotrank(res.list$prec)
+```
+
+#  {.unnumbered}
+
+## Percent synchrony explained
+
+Percent synchrony explained is now computed for significant and marginally significant climate variables, which include *`r env.sig`*.
+
+```{r wlm syncexpl function parameters}
+## update data to include only appropriate env variables
+dat2 <- dat[names(dat) %in% c("cx_tar", env.sig)]
+
+# define parameters for functions used in this step:
+## wsyn::wlm()
+resp <- 1                     # index of response variable
+pred <- 2:(length(env.sig)+1) # index of predictor variable
+norm <- "powall"  # normalization of wavelet transforms to use
+
+blong<-c(10,12)   # timescale of interest, i.e., ~ annual timescale, 10 to 12 months
+```
+
+```{r}
+# adjust data/parameter 
+## include only appropriate env variables
+dat2 <- dat[names(dat) %in% c("cx_tar", env.sig)]
+# pred:
+pred <- 2:(length(env.sig)+1)
+
+syn.expl <- data.frame()
+
+for(p in pred){
+
+  # define wlmobj
+  dat.wlm <- wlm(dat2, times, resp, p, norm)
+  
+  se_env <- syncexpl(dat.wlm)
+  se_long_env <- se_env[se_env$timescales>=blong[1] & se_env$timescales<=blong[2],]
+  d1 <-round(100*colMeans(se_long_env[,c(3:6)])/mean(se_long_env$sync),4)
+  
+  # get syn explained values for each predictor var
+  se <- data.frame(se.names = names(d1), 
+                   se.vals = round(d1,3)) %>% 
+    mutate(env_var = names(dat.wlm$dat[2])) %>% 
+    pivot_wider(names_from = se.names, values_from = se.vals)
+  se <- se[, -max(ncol(se))]
+  
+  syn.expl <- rbind(syn.expl, se)
+
+}
+
+syn.expl <- syn.expl %>% 
+  arrange(env_var)
+
+# save summary of p-values
+write.csv(syn.expl, file.path(outDir, str_c("cxtar_wsyn45_", sigmethod, n, "syncexpl.csv", sep="_")), row.names = F)
+```
+
+<br>
+
+```{r, echo = FALSE}
+knitr::kable(syn.expl, format = "html", table.attr = "style='width:75%;'")
+```
+
+# Slopes
+
+To test whether a significant decrease in the strength of spatial synchrony across the study period occurred at the annual timescale, we generate `n==10000` wpmf synchrony preserving surrogates (`wsyn::surrog()`, with `surrtype = "aaft"`).
+We then calculate the slope of synchrony values at the 12 month and averaged 10 to 12 month timescales for the observed and generated (`surrog`) data before calculating the proportion of the 10,000 surrogate slopes less than or equal to the observed slopes to obtain a p-value (ɑ \< 0.05).
+
+```{r get surrog slopes function}
+## Function to get slopes for parallel-computed surrogate data
+
+# Define a function to process each iteration
+process_iteration <- function(i) {
+  x <- i  # Surrogate data
+  
+  v.wpmf <- wpmf(x, times = times, sigmethod = "none")
+  
+  g <- abs(v.wpmf$value)
+  g12 <- g[, 37]
+  g10_12 <- rowMeans(g[,34:38], na.rm = TRUE)
+  
+  out1 <- lm(g12 ~ times)
+  slope_surrog <- out1$coefficients[2]
+  names(slope_surrog) <- "slope_surrog"
+  
+  out2 <- lm(g10_12 ~ times)
+  slope_surrog2 <- out2$coefficients[2]
+  names(slope_surrog2) <- "slope_surrog2"
+  
+  # Return the calculated slopes for this iteration
+  return(c(slope_surrog, slope_surrog2))
+}
+
+## Note: 
+# the function should be updated to dynamic column selection 
+# (select columns/values by name rather than index)
+# to improve its applicability and reduce risk of erroneously pulling the wrong information
+
+```
+
+## *Culex tarsalis* slopes
+
+```{r}
+# 12 month time scale
+gwpmf12 <- gwpmf[,37]
+
+# 10 to 12 month timescales average
+gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
+
+
+# Regress (linear) against time, take the slope call it slope_real
+# 12 month time scale
+out1<-lm(gwpmf12 ~ times)
+slope_real<- out1$coefficients[2] # times = slope
+
+# 10 to 12 month timescales average
+out2<-lm(gwpmf10_12 ~ times)
+slope_real2 <- out2$coefficients[2]
+
+slopes_wpmf <- cbind(slope_real, slope_real2)
+```
+
+
+```{r, eval = F}
+# generate surrogate data:
+sur <- surrog(dat[[1]],nsurrogs = n,surrtype = sigmethod, syncpres = TRUE) 
+
+# Create a parallel cluster and register it
+
+#Set the number of cores for parallel processing
+num_cores <- 2  # Adjust as needed
+cl <- makeCluster(num_cores)
+
+# num_cores <- detectCores(logical = FALSE)
+# cl <- makeCluster(floor(0.75 * num_cores)
+
+registerDoParallel(cl)
+
+# Apply the function in parallel
+results <- foreach(j = 1:length(sur), .combine = rbind, .packages = "wsyn") %dopar% {
+  process_iteration(sur[[j]])
+}
+
+# Stop the parallel cluster
+stopCluster(cl)
+
+# Combine the results into a data frame
+df_slope <- as.data.frame(results)
+
+# Save the resulting slope data frame
+file.name <- str_c("Surrogate_slopes_cxtar_", sigmethod, "_", n, ".csv")
+write.csv(df_slope, file.path(outDir, file.name))
+```
+
+```{r, echo =F, warning=F, message=F}
+
+sur_slope <- read.csv(file.path(outDir, str_c("Surrogate_slopes_cxtar_", sigmethod, "_", n, ".csv")), stringsAsFactors = F)
+
+  # 12 month:
+  slope_r1 <-  slopes_wpmf[1,1]
+  slopes_s1 <- sur_slope %>% filter(slope_surrog <= slope_r1) %>% pull(slope_surrog)
+  
+  # cat("p at annual timescale:", length(slopes_s1)/length(sur_slope$slope_surrog))
+
+  
+  # 10 to 12 month:
+  slope_r2 <- slopes_wpmf[1,2]
+  slopes_s2 <- sur_slope %>% filter(slope_surrog2 <= slope_r2) %>% pull(slope_surrog)
+  
+  # cat("p at approx. annual timescale:", length(slopes_s2)/length(sur_slope$slope_surrog2))
+
+
+h2a <- ggplot(sur_slope, aes(slope_surrog))+
+  geom_histogram(fill="lightsteelblue4", alpha=.5) +
+  geom_vline(xintercept=0, linewidth = 0.5, linetype = 2, color = "black") + 
+  geom_vline(xintercept=slopes_wpmf[1,1], linewidth = 1, color = "blue4") +
+  scale_x_continuous(name = str_c("p-value: ",
+                                  round(length(slopes_s1)/length(sur_slope$slope_surrog),3))
+                     )+
+  labs(title = 'Culex tarsalis', 
+       subtitle="Annual (12 month) timescale") +
+  theme_bw() +
+  theme(axis.title.x = element_text(colour=ifelse(length(slopes_s1)/length(sur_slope$slope_surrog) < 0.1, "red4", "black")))
+
+h2b <- ggplot(sur_slope, aes(slope_surrog2))+
+  geom_histogram(fill="lightsteelblue4", alpha=.4) +
+  geom_vline(xintercept=0, linewidth = 0.5, linetype = 2, color = "black") + 
+  geom_vline(xintercept=slopes_wpmf[1,2], linewidth = 0.75, color = "blue4") +
+  scale_x_continuous(name = str_c("p-value: ",
+                                  round(length(slopes_s2)/length(sur_slope$slope_surrog2), 3))
+                     )+
+  scale_y_continuous(name = NULL) +
+  labs(subtitle="Approx. annual (10 to 12 month avg.) timescale") +
+  theme_bw() +
+  theme(axis.title.x = element_text(colour=ifelse(length(slopes_s2)/length(sur_slope$slope_surrog2) < 0.1, "red4", "black")))
+
+h2a + h2b
+```
+
+## Environmental slopes:
+
+We then test whether a significant decrease in the strength of annual spatial synchrony occured in the climate variables:
+
+```{r env data slopes, eval=FALSE}
+
+env_sur <- list()
+
+for(p in env){
+  
+  # get matrix of computed values:
+  moswpmf <- env_wpmf[[p]]
+  gwpmf<- abs(moswpmf$value)
+  
+  # 12 month time scale
+  gwpmf12 <- gwpmf[,37]
+  gwpmf12
+  
+  # 10 to 12 month timescales average
+  gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
+  gwpmf10_12
+  
+  # Regress (linear) against time, take the slope call it slope_real
+  # 12 month time scale
+  out1<-lm(gwpmf12 ~ times)
+  slope_real<- out1$coefficients[2] # times = slope
+  
+  # 10 to 12 month timescales average
+  out2<-lm(gwpmf10_12 ~ times)
+  slope_real2 <- out2$coefficients[2]
+  
+  slopes_wpmf <- cbind(slope_real, slope_real2)
+  
+  env_sur[[p]]$real <- slopes_wpmf
+  
+  
+  ## surrogate slopes
+  
+  # generate surrogate data
+  sur <- surrog(dat[[p]], nsurrogs = n, surrtype = sigmethod, syncpres = TRUE) 
+
+  # calculate surrog slopes - parallel 
+  num_cores <- 2  # Adjust as needed
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
+  
+  # Apply the function in parallel
+  results <- foreach(j = 1:length(sur), .combine = rbind, .packages = "wsyn") %dopar% {
+    process_iteration(sur[[j]])
+  }
+  
+  # Stop the parallel cluster
+  stopCluster(cl)
+  
+  # Combine the results into a data frame
+  sur_slope <- as.data.frame(results)
+
+  env_sur[[p]]$sur <- sur_slope
+  
+  if(p == last(env)){saveRDS(env_sur, file.path(outDir, str_c("Surrogate_slopes_env_", sigmethod, "_", n, ".RDS")))}
+
+} 
+```
+
+```{r, message=F, warning=FALSE, eval=F}
+env_sur <- readRDS(file.path(outDir, str_c("Surrogate_slopes_env_", sigmethod, "_", n, ".RDS")))
+
+for(e in env){
+  
+  slopes <- env_sur[[e]]
+  
+  # 12 month:
+  slope_r1 <- slopes$real[1]
+  slopes_s1 <- slopes$sur$slope_surrog[slopes$sur$slope_surrog <= slope_r1]
+  
+  # 10 to 12 month:
+  slope_r2 <- slopes$real[2]
+  slopes_s2 <- slopes$sur$slope_surrog2[slopes$sur$slope_surrog2 <= slope_r2]
+  
+} 
+
+```
+
+## Slope summary
+
+```{r echo=F, message=F, warning=F}
+## p values for cx data: ###############################################################
+
+sur_slope <- read.csv(file.path(outDir, str_c("Surrogate_slopes_cxtar_", sigmethod, "_", n, ".csv")), stringsAsFactors = F)
+
+slp_cx <- data.frame()
+
+# 12 month:
+slope_r1 <-  slopes_wpmf[1,1]
+slopes_s1 <- sur_slope %>% filter(slope_surrog <= slope_r1) %>% pull(slope_surrog)
+
+# 10 to 12 month:
+slope_r2 <- slopes_wpmf[1,2]
+slopes_s2 <- sur_slope %>% filter(slope_surrog2 <= slope_r2) %>% pull(slope_surrog)
+
+slp_cx <- data.frame(var_name = c("cx_tar", "cx_tar"),
+                      timescale = c("12", "10to12"), 
+                      obs_slope = c(round(slope_r1, 5), round(slope_r2, 5)), 
+                      p_value = c(round(length(slopes_s1)/length(sur_slope$slope_surrog),3), round(length(slopes_s2)/length(sur_slope$slope_surrog2),3))
+                      ) 
+
+## summary/p values for env data: ###############################################################
+
+env_sur <- readRDS(file.path(outDir, str_c("Surrogate_slopes_env_", sigmethod, "_", n, ".RDS")))
+
+# df to gather:
+
+slp_env <- data.frame()
+  
+for(e in env){
+  
+  slopes <- env_sur[[e]]
+  
+  # 12 month:
+  slope_r1 <- slopes$real[1]
+  slopes_s1 <- slopes$sur$slope_surrog[slopes$sur$slope_surrog <= slope_r1]
+  
+  # 10 to 12 month:
+  slope_r2 <- slopes$real[2]
+  slopes_s2 <- slopes$sur$slope_surrog2[slopes$sur$slope_surrog2 <= slope_r2]
+  
+   slp_e <- data.frame(
+     var_name = c(e, e),
+     timescale = c("12", "10to12"), 
+     obs_slope = c(round(slope_r1, 5), round(slope_r2, 5)), 
+     p_value = c(round(length(slopes_s1)/length(slopes$sur$slope_surrog),3),
+                 round(length(slopes_s2)/length(slopes$sur$slope_surrog2),3))
+     ) 
+  
+  slp_env <- rbind(slp_env, slp_e)
+  
+} 
+
+slp_env <- slp_env %>% arrange(var_name)
+
+
+
+#################################################################################################
+## summary/p values for all data: ###############################################################
+
+slp_sum <- data.frame()
+slp_sum <- rbind(slp_cx, slp_env) %>% unique()
+
+# save summary of slope p-values
+write.csv(slp_sum, file.path(outDir, str_c("cxtar_env_wsyn45", sigmethod, n, "slope_pvalues.csv", sep="_")), row.names = F)
+
+
+slp_sum12 <- slp_sum %>% 
+  filter(timescale == "12") %>% 
+  select(var_name, obs_slope, p_value) %>% 
+  unique()
+
+slp_sum10to12 <- rbind(slp_cx, slp_env) %>% 
+  filter(timescale == "10to12") %>% 
+  select(var_name, obs_slope, p_value) %>% 
+  unique()
+```
+
+#### Annual timescale
+
+```{r echo = F}
+knitr::kable(slp_sum12, format = "html", table.attr = "style='width:75%;'")
+```
+
+<br>
+
+#### Approx. annual timescale
+
+```{r echo = F}
+knitr::kable(slp_sum10to12, format = "html", table.attr = "style='width:75%;'")
+```
+
+
+
