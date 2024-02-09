@@ -2,7 +2,7 @@ Broadscale spatial synchrony in a West Nile virus mosquito vector across
 multiple timescales
 ================
 Amy Bauer,
-last edited 2024-01-30
+last edited 2024-02-08
 
 ### Preparation
 
@@ -156,6 +156,7 @@ and environmental variable timeseries are each de-meaned, detrended, and
 variances are standardized to 1 using `wsyn::cleandat()` with `clev==3`.
 
 ``` r
+dat <- readRDS(file.path(inDir, "cxtar_wsyn45_data.RDS"))
 # define timesteps
 times <- 1:45
 
@@ -235,7 +236,7 @@ norm <- "powall"  # normalization of wavelet transforms to use
 n <- 10000        # nrand
 
 ## wsyn::bandtest() 
-blong<-c(10,12)   # timescale of interest, i.e., ~ annual timescale, 10 to 12 months
+blong<-c(10,14)   # timescale of interest, i.e., ~ annual timescale, 10 to 14 months
 ```
 
 ``` r
@@ -247,7 +248,7 @@ res.list <- list()
 for(p in pred){
   
   # control:
-  cat("env. predictor:", p, "\n", sep = " ")
+  # cat("env. predictor:", p, "\n", sep = " ")
   
   # define wlmobj
   dat.wlm <- wlm(dat, times, resp, p, norm)
@@ -274,6 +275,8 @@ for(p in pred){
 
 ## p-value summary
 
+Summary table, sorted by *p*-values:
+
 <table style="width:75%;">
 <thead>
 <tr>
@@ -294,24 +297,10 @@ nrand
 <tbody>
 <tr>
 <td style="text-align:left;">
-rmin
-</td>
-<td style="text-align:right;">
-0.0216
-</td>
-<td style="text-align:left;">
-aaft
-</td>
-<td style="text-align:right;">
-10000
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
 tmin
 </td>
 <td style="text-align:right;">
-0.0799
+0.0678
 </td>
 <td style="text-align:left;">
 aaft
@@ -322,10 +311,10 @@ aaft
 </tr>
 <tr>
 <td style="text-align:left;">
-rmax
+rmin
 </td>
 <td style="text-align:right;">
-0.1064
+0.0938
 </td>
 <td style="text-align:left;">
 aaft
@@ -339,7 +328,21 @@ aaft
 tmax
 </td>
 <td style="text-align:right;">
-0.1293
+0.1362
+</td>
+<td style="text-align:left;">
+aaft
+</td>
+<td style="text-align:right;">
+10000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+rmax
+</td>
+<td style="text-align:right;">
+0.2035
 </td>
 <td style="text-align:left;">
 aaft
@@ -353,7 +356,7 @@ aaft
 prec
 </td>
 <td style="text-align:right;">
-0.7510
+0.6689
 </td>
 <td style="text-align:left;">
 aaft
@@ -368,8 +371,8 @@ aaft
 ## Percent synchrony explained
 
 Percent synchrony explained is now computed for significant and
-marginally significant climate variables, which include *rmin, tmin,
-rmax, tmax*.
+marginally significant climate variables, which include *tmin, rmin,
+tmax*.
 
 ``` r
 ## update data to include only appropriate env variables
@@ -381,7 +384,7 @@ resp <- 1                     # index of response variable
 pred <- 2:(length(env.sig)+1) # index of predictor variable
 norm <- "powall"  # normalization of wavelet transforms to use
 
-blong<-c(10,12)   # timescale of interest, i.e., ~ annual timescale, 10 to 12 months
+blong<-c(10,14)   # timescale of interest, i.e., ~ annual timescale, 10 to 14 months
 ```
 
 ``` r
@@ -442,30 +445,16 @@ resids
 <tbody>
 <tr>
 <td style="text-align:left;">
-rmax
-</td>
-<td style="text-align:right;">
-3.436
-</td>
-<td style="text-align:right;">
-29.582
-</td>
-<td style="text-align:right;">
-66.982
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
 rmin
 </td>
 <td style="text-align:right;">
-43.514
+44.290
 </td>
 <td style="text-align:right;">
-41.802
+36.228
 </td>
 <td style="text-align:right;">
-14.684
+19.482
 </td>
 </tr>
 <tr>
@@ -473,13 +462,13 @@ rmin
 tmax
 </td>
 <td style="text-align:right;">
-100.989
+100.684
 </td>
 <td style="text-align:right;">
--2.021
+-1.738
 </td>
 <td style="text-align:right;">
-1.031
+1.054
 </td>
 </tr>
 <tr>
@@ -487,13 +476,13 @@ tmax
 tmin
 </td>
 <td style="text-align:right;">
-98.577
+99.407
 </td>
 <td style="text-align:right;">
-0.315
+-0.518
 </td>
 <td style="text-align:right;">
-1.108
+1.111
 </td>
 </tr>
 </tbody>
@@ -505,7 +494,7 @@ To test whether a significant decrease in the strength of spatial
 synchrony across the study period occurred at the annual timescale, we
 generate `n==10000` wpmf synchrony preserving surrogates
 (`wsyn::surrog()`, with `surrtype = "aaft"`). We then calculate the
-slope of synchrony values at the 12 month and averaged 10 to 12 month
+slope of synchrony values at the 12 month and averaged 10 to 14 month
 timescales for the observed and generated (`surrog`) data before
 calculating the proportion of the 10,000 surrogate slopes less than or
 equal to the observed slopes to obtain a p-value (ɑ \< 0.05).
@@ -520,14 +509,14 @@ process_iteration <- function(i) {
   v.wpmf <- wpmf(x, times = times, sigmethod = "none")
   
   g <- abs(v.wpmf$value)
-  g12 <- g[, 37]
-  g10_12 <- rowMeans(g[,34:38], na.rm = TRUE)
+  g12 <- g[, 38]
+  g10_14 <- rowMeans(g[,34:41], na.rm = TRUE)
   
   out1 <- lm(g12 ~ times)
   slope_surrog <- out1$coefficients[2]
   names(slope_surrog) <- "slope_surrog"
   
-  out2 <- lm(g10_12 ~ times)
+  out2 <- lm(g10_14 ~ times)
   slope_surrog2 <- out2$coefficients[2]
   names(slope_surrog2) <- "slope_surrog2"
   
@@ -545,10 +534,10 @@ process_iteration <- function(i) {
 
 ``` r
 # 12 month time scale
-gwpmf12 <- gwpmf[,37]
+gwpmf12 <- gwpmf[,38]
 
-# 10 to 12 month timescales average
-gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
+# 10 to 14 month timescales average
+gwpmf10_14 <- rowMeans(gwpmf[,34:41], na.rm = T)
 
 
 # Regress (linear) against time, take the slope call it slope_real
@@ -556,8 +545,8 @@ gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
 out1<-lm(gwpmf12 ~ times)
 slope_real<- out1$coefficients[2] # times = slope
 
-# 10 to 12 month timescales average
-out2<-lm(gwpmf10_12 ~ times)
+# 10 to 14 month timescales average
+out2<-lm(gwpmf10_14 ~ times)
 slope_real2 <- out2$coefficients[2]
 
 slopes_wpmf <- cbind(slope_real, slope_real2)
@@ -591,7 +580,7 @@ df_slope <- as.data.frame(results)
 
 # Save the resulting slope data frame
 file.name <- str_c("Surrogate_slopes_cxtar_", sigmethod, "_", n, ".csv")
-write.csv(df_slope, file.path(outDir, file.name))
+write.csv(df_slope, file.path(outDir, file.name), row.names = F)
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
@@ -611,20 +600,20 @@ for(p in env){
   gwpmf<- abs(moswpmf$value)
   
   # 12 month time scale
-  gwpmf12 <- gwpmf[,37]
+  gwpmf12 <- gwpmf[,38]
   gwpmf12
   
-  # 10 to 12 month timescales average
-  gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
-  gwpmf10_12
+  # 10 to 14 month timescales average
+  gwpmf10_14 <- rowMeans(gwpmf[,34:41], na.rm = T)
+  gwpmf10_14
   
   # Regress (linear) against time, take the slope call it slope_real
   # 12 month time scale
   out1<-lm(gwpmf12 ~ times)
   slope_real<- out1$coefficients[2] # times = slope
   
-  # 10 to 12 month timescales average
-  out2<-lm(gwpmf10_12 ~ times)
+  # 10 to 14 month timescales average
+  out2<-lm(gwpmf10_14 ~ times)
   slope_real2 <- out2$coefficients[2]
   
   slopes_wpmf <- cbind(slope_real, slope_real2)
@@ -671,7 +660,7 @@ for(e in env){
   slope_r1 <- slopes$real[1]
   slopes_s1 <- slopes$sur$slope_surrog[slopes$sur$slope_surrog <= slope_r1]
   
-  # 10 to 12 month:
+  # 10 to 14 month:
   slope_r2 <- slopes$real[2]
   slopes_s2 <- slopes$sur$slope_surrog2[slopes$sur$slope_surrog2 <= slope_r2]
   
@@ -702,10 +691,10 @@ p_value
 cx_tar
 </td>
 <td style="text-align:right;">
--0.00264
+-0.00571
 </td>
 <td style="text-align:right;">
-0.313
+0.222
 </td>
 </tr>
 <tr>
@@ -713,10 +702,10 @@ cx_tar
 prec
 </td>
 <td style="text-align:right;">
--0.01676
+-0.01786
 </td>
 <td style="text-align:right;">
-0.029
+0.063
 </td>
 </tr>
 <tr>
@@ -724,10 +713,10 @@ prec
 rmax
 </td>
 <td style="text-align:right;">
-0.00648
+0.00526
 </td>
 <td style="text-align:right;">
-0.587
+0.562
 </td>
 </tr>
 <tr>
@@ -735,10 +724,10 @@ rmax
 rmin
 </td>
 <td style="text-align:right;">
-0.02176
+0.01632
 </td>
 <td style="text-align:right;">
-0.755
+0.668
 </td>
 </tr>
 <tr>
@@ -746,10 +735,10 @@ rmin
 tmax
 </td>
 <td style="text-align:right;">
--0.00001
+0.00000
 </td>
 <td style="text-align:right;">
-0.400
+0.442
 </td>
 </tr>
 <tr>
@@ -757,10 +746,10 @@ tmax
 tmin
 </td>
 <td style="text-align:right;">
--0.00002
+-0.00001
 </td>
 <td style="text-align:right;">
-0.455
+0.466
 </td>
 </tr>
 </tbody>
@@ -790,10 +779,10 @@ p_value
 cx_tar
 </td>
 <td style="text-align:right;">
--0.00862
+-0.00909
 </td>
 <td style="text-align:right;">
-0.086
+0.073
 </td>
 </tr>
 <tr>
@@ -801,10 +790,10 @@ cx_tar
 prec
 </td>
 <td style="text-align:right;">
--0.00755
+-0.00777
 </td>
 <td style="text-align:right;">
-0.174
+0.164
 </td>
 </tr>
 <tr>
@@ -812,10 +801,10 @@ prec
 rmax
 </td>
 <td style="text-align:right;">
-0.00992
+0.00963
 </td>
 <td style="text-align:right;">
-0.748
+0.740
 </td>
 </tr>
 <tr>
@@ -823,10 +812,10 @@ rmax
 rmin
 </td>
 <td style="text-align:right;">
-0.02098
+0.02055
 </td>
 <td style="text-align:right;">
-0.839
+0.837
 </td>
 </tr>
 <tr>
@@ -837,7 +826,7 @@ tmax
 -0.00002
 </td>
 <td style="text-align:right;">
-0.361
+0.421
 </td>
 </tr>
 <tr>
@@ -848,8 +837,90 @@ tmin
 -0.00003
 </td>
 <td style="text-align:right;">
-0.418
+0.484
 </td>
 </tr>
 </tbody>
 </table>
+
+------------------------------------------------------------------------
+
+### R software and package references
+
+All analyses were done in R version 4.3.2 (R Core Team 2023).
+
+<br>
+
+<div id="refs" class="references csl-bib-body hanging-indent">
+
+<div id="ref-R-doParallel" class="csl-entry">
+
+Corporation, Microsoft, and Steve Weston. 2022. *doParallel: Foreach
+Parallel Adaptor for the Parallel Package*.
+<https://github.com/RevolutionAnalytics/doparallel>.
+
+</div>
+
+<div id="ref-R-viridis" class="csl-entry">
+
+Garnier, Simon. 2023. *Viridis: Colorblind-Friendly Color Maps for r*.
+<https://sjmgarnier.github.io/viridis/>.
+
+</div>
+
+<div id="ref-viridis2023" class="csl-entry">
+
+Garnier, Simon, Ross, Noam, Rudis, Robert, Camargo, et al. 2023.
+*<span class="nocase">viridis(Lite)</span> - Colorblind-Friendly Color
+Maps for r*. <https://doi.org/10.5281/zenodo.4679424>.
+
+</div>
+
+<div id="ref-R-patchwork" class="csl-entry">
+
+Pedersen, Thomas Lin. 2022. *Patchwork: The Composer of Plots*.
+<https://patchwork.data-imaginist.com>.
+
+</div>
+
+<div id="ref-R-base" class="csl-entry">
+
+R Core Team. 2023. *R: A Language and Environment for Statistical
+Computing*. Vienna, Austria: R Foundation for Statistical Computing.
+<https://www.R-project.org/>.
+
+</div>
+
+<div id="ref-ggplot22016" class="csl-entry">
+
+Wickham, Hadley. 2016. *Ggplot2: Elegant Graphics for Data Analysis*.
+Springer-Verlag New York. <https://ggplot2.tidyverse.org>.
+
+</div>
+
+<div id="ref-R-tidyverse" class="csl-entry">
+
+———. 2023. *Tidyverse: Easily Install and Load the Tidyverse*.
+<https://tidyverse.tidyverse.org>.
+
+</div>
+
+<div id="ref-tidyverse2019" class="csl-entry">
+
+Wickham, Hadley, Mara Averick, Jennifer Bryan, Winston Chang, Lucy
+D’Agostino McGowan, Romain François, Garrett Grolemund, et al. 2019.
+“Welcome to the <span class="nocase">tidyverse</span>.” *Journal of Open
+Source Software* 4 (43): 1686. <https://doi.org/10.21105/joss.01686>.
+
+</div>
+
+<div id="ref-R-ggplot2" class="csl-entry">
+
+Wickham, Hadley, Winston Chang, Lionel Henry, Thomas Lin Pedersen,
+Kohske Takahashi, Claus Wilke, Kara Woo, Hiroaki Yutani, and Dewey
+Dunnington. 2023. *Ggplot2: Create Elegant Data Visualisations Using the
+Grammar of Graphics*. <https://ggplot2.tidyverse.org>.
+
+</div>
+
+</div>

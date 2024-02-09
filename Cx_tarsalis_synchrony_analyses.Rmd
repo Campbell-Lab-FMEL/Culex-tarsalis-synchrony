@@ -37,7 +37,7 @@ library(viridis)
 workDir <- file.path(".")
 datDir <- file.path(workDir, "data")
 inDir <- file.path(datDir, "input")
-outDir <- file.path(datDir, "output")
+outDir <- file.path(datDir, "output10_14")
 if(!dir.exists(outDir)){dir.create(outDir)}
 ```
 
@@ -87,7 +87,7 @@ ggplot(viz, aes(x = date, y = siteID, fill = mmpth)) +
 
 ### Load and transpose data
 
-```{r}
+```{r, eval = T}
 # list of environmental variables included in analyses
 env <- c("prec", "tmin", "tmax", "rmin", "rmax") 
 
@@ -153,6 +153,7 @@ rm(list = c("d", "d1", "dat.list", "p"))
 To prepare the data for subsequent analyses, the monthly *Cx. tarsalis* and environmental variable timeseries are each de-meaned, detrended, and variances are standardized to 1 using `wsyn::cleandat()` with `clev==3`.
 
 ```{r}
+dat <- readRDS(file.path(inDir, "cxtar_wsyn45_data.RDS"))
 # define timesteps
 times <- 1:45
 
@@ -248,7 +249,7 @@ norm <- "powall"  # normalization of wavelet transforms to use
 n <- 10000        # nrand
 
 ## wsyn::bandtest() 
-blong<-c(10,12)   # timescale of interest, i.e., ~ annual timescale, 10 to 12 months
+blong<-c(10,14)   # timescale of interest, i.e., ~ annual timescale, 10 to 14 months
 ```
 
 ```{r wlm wlmtest for significant relationship, eval = F}
@@ -260,7 +261,7 @@ res.list <- list()
 for(p in pred){
   
   # control:
-  cat("env. predictor:", p, "\n", sep = " ")
+  # cat("env. predictor:", p, "\n", sep = " ")
   
   # define wlmobj
   dat.wlm <- wlm(dat, times, resp, p, norm)
@@ -313,7 +314,11 @@ env.sig <- env.sig %>% arrange(p_value)
 write.csv(env.sig, file.path(outDir, str_c("cxtar_wsyn45_wlmtest", sigmethod, n, "pvalues.csv", sep="_")), row.names = F)
 ```
 
+Summary table, sorted by *p*-values:
+
 ```{r echo = F}
+env.sig <- read.csv(file.path(outDir, str_c("cxtar_wsyn45_wlmtest", sigmethod, n, "pvalues.csv", sep="_")), stringsAsFactors = F)
+
 env.sig <- env.sig %>% 
   mutate(p_value = round(p_value, 4))
 
@@ -385,7 +390,7 @@ resp <- 1                     # index of response variable
 pred <- 2:(length(env.sig)+1) # index of predictor variable
 norm <- "powall"  # normalization of wavelet transforms to use
 
-blong<-c(10,12)   # timescale of interest, i.e., ~ annual timescale, 10 to 12 months
+blong<-c(10,14)   # timescale of interest, i.e., ~ annual timescale, 10 to 14 months
 ```
 
 ```{r}
@@ -427,13 +432,14 @@ write.csv(syn.expl, file.path(outDir, str_c("cxtar_wsyn45_", sigmethod, n, "sync
 <br>
 
 ```{r, echo = FALSE}
+syn.expl <- read.csv(file.path(outDir, str_c("cxtar_wsyn45_", sigmethod, n, "syncexpl.csv", sep="_")), stringsAsFactors = F)
 knitr::kable(syn.expl, format = "html", table.attr = "style='width:75%;'")
 ```
 
 # Slopes
 
 To test whether a significant decrease in the strength of spatial synchrony across the study period occurred at the annual timescale, we generate `n==10000` wpmf synchrony preserving surrogates (`wsyn::surrog()`, with `surrtype = "aaft"`).
-We then calculate the slope of synchrony values at the 12 month and averaged 10 to 12 month timescales for the observed and generated (`surrog`) data before calculating the proportion of the 10,000 surrogate slopes less than or equal to the observed slopes to obtain a p-value (ɑ \< 0.05).
+We then calculate the slope of synchrony values at the 12 month and averaged 10 to 14 month timescales for the observed and generated (`surrog`) data before calculating the proportion of the 10,000 surrogate slopes less than or equal to the observed slopes to obtain a p-value (ɑ \< 0.05).
 
 ```{r get surrog slopes function}
 ## Function to get slopes for parallel-computed surrogate data
@@ -445,14 +451,14 @@ process_iteration <- function(i) {
   v.wpmf <- wpmf(x, times = times, sigmethod = "none")
   
   g <- abs(v.wpmf$value)
-  g12 <- g[, 37]
-  g10_12 <- rowMeans(g[,34:38], na.rm = TRUE)
+  g12 <- g[, 38]
+  g10_14 <- rowMeans(g[,34:41], na.rm = TRUE)
   
   out1 <- lm(g12 ~ times)
   slope_surrog <- out1$coefficients[2]
   names(slope_surrog) <- "slope_surrog"
   
-  out2 <- lm(g10_12 ~ times)
+  out2 <- lm(g10_14 ~ times)
   slope_surrog2 <- out2$coefficients[2]
   names(slope_surrog2) <- "slope_surrog2"
   
@@ -471,10 +477,10 @@ process_iteration <- function(i) {
 
 ```{r}
 # 12 month time scale
-gwpmf12 <- gwpmf[,37]
+gwpmf12 <- gwpmf[,38]
 
-# 10 to 12 month timescales average
-gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
+# 10 to 14 month timescales average
+gwpmf10_14 <- rowMeans(gwpmf[,34:41], na.rm = T)
 
 
 # Regress (linear) against time, take the slope call it slope_real
@@ -482,8 +488,8 @@ gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
 out1<-lm(gwpmf12 ~ times)
 slope_real<- out1$coefficients[2] # times = slope
 
-# 10 to 12 month timescales average
-out2<-lm(gwpmf10_12 ~ times)
+# 10 to 14 month timescales average
+out2<-lm(gwpmf10_14 ~ times)
 slope_real2 <- out2$coefficients[2]
 
 slopes_wpmf <- cbind(slope_real, slope_real2)
@@ -518,7 +524,7 @@ df_slope <- as.data.frame(results)
 
 # Save the resulting slope data frame
 file.name <- str_c("Surrogate_slopes_cxtar_", sigmethod, "_", n, ".csv")
-write.csv(df_slope, file.path(outDir, file.name))
+write.csv(df_slope, file.path(outDir, file.name), row.names = F)
 ```
 
 ```{r, echo =F, warning=F, message=F}
@@ -532,7 +538,7 @@ sur_slope <- read.csv(file.path(outDir, str_c("Surrogate_slopes_cxtar_", sigmeth
   # cat("p at annual timescale:", length(slopes_s1)/length(sur_slope$slope_surrog))
 
   
-  # 10 to 12 month:
+  # 10 to 14 month:
   slope_r2 <- slopes_wpmf[1,2]
   slopes_s2 <- sur_slope %>% filter(slope_surrog2 <= slope_r2) %>% pull(slope_surrog)
   
@@ -559,18 +565,40 @@ h2b <- ggplot(sur_slope, aes(slope_surrog2))+
                                   round(length(slopes_s2)/length(sur_slope$slope_surrog2), 3))
                      )+
   scale_y_continuous(name = NULL) +
-  labs(subtitle="Approx. annual (10 to 12 month avg.) timescale") +
+  labs(subtitle="Approx. annual (10 to 14 month avg.) timescale") +
   theme_bw() +
   theme(axis.title.x = element_text(colour=ifelse(length(slopes_s2)/length(sur_slope$slope_surrog2) < 0.1, "red4", "black")))
 
 h2a + h2b
 ```
 
+```{r, echo = F, message = F}
+## p values for cx data: ###############################################################
+sur_slope <- read.csv(file.path(outDir, str_c("Surrogate_slopes_cxtar_", sigmethod, "_", n, ".csv")), stringsAsFactors = F)
+
+slp_cx <- data.frame()
+
+# 12 month:
+slope_r1 <-  slopes_wpmf[1,1]
+slopes_s1 <- sur_slope %>% filter(slope_surrog <= slope_r1) %>% pull(slope_surrog)
+
+# 10 to 14 month:
+slope_r2 <- slopes_wpmf[1,2]
+slopes_s2 <- sur_slope %>% filter(slope_surrog2 <= slope_r2) %>% pull(slope_surrog)
+
+slp_cx <- data.frame(var_name = c("cx_tar", "cx_tar"),
+                      timescale = c("12", "10to14"), 
+                      obs_slope = c(round(slope_r1, 5), round(slope_r2, 5)), 
+                      p_value = c(round(length(slopes_s1)/length(sur_slope$slope_surrog),3), round(length(slopes_s2)/length(sur_slope$slope_surrog2),3))
+                      ) 
+```
+
+
 ## Environmental slopes:
 
 We then test whether a significant decrease in the strength of annual spatial synchrony occured in the climate variables:
 
-```{r env data slopes, eval=FALSE}
+```{r env data slopes, eval=F}
 
 env_sur <- list()
 
@@ -581,20 +609,20 @@ for(p in env){
   gwpmf<- abs(moswpmf$value)
   
   # 12 month time scale
-  gwpmf12 <- gwpmf[,37]
+  gwpmf12 <- gwpmf[,38]
   gwpmf12
   
-  # 10 to 12 month timescales average
-  gwpmf10_12 <- rowMeans(gwpmf[,34:38], na.rm = T)
-  gwpmf10_12
+  # 10 to 14 month timescales average
+  gwpmf10_14 <- rowMeans(gwpmf[,34:41], na.rm = T)
+  gwpmf10_14
   
   # Regress (linear) against time, take the slope call it slope_real
   # 12 month time scale
   out1<-lm(gwpmf12 ~ times)
   slope_real<- out1$coefficients[2] # times = slope
   
-  # 10 to 12 month timescales average
-  out2<-lm(gwpmf10_12 ~ times)
+  # 10 to 14 month timescales average
+  out2<-lm(gwpmf10_14 ~ times)
   slope_real2 <- out2$coefficients[2]
   
   slopes_wpmf <- cbind(slope_real, slope_real2)
@@ -630,7 +658,7 @@ for(p in env){
 } 
 ```
 
-```{r, message=F, warning=FALSE, eval=F}
+```{r, message=F, warning=FALSE, eval=T}
 env_sur <- readRDS(file.path(outDir, str_c("Surrogate_slopes_env_", sigmethod, "_", n, ".RDS")))
 
 for(e in env){
@@ -641,7 +669,7 @@ for(e in env){
   slope_r1 <- slopes$real[1]
   slopes_s1 <- slopes$sur$slope_surrog[slopes$sur$slope_surrog <= slope_r1]
   
-  # 10 to 12 month:
+  # 10 to 14 month:
   slope_r2 <- slopes$real[2]
   slopes_s2 <- slopes$sur$slope_surrog2[slopes$sur$slope_surrog2 <= slope_r2]
   
@@ -652,25 +680,6 @@ for(e in env){
 ## Slope summary
 
 ```{r echo=F, message=F, warning=F}
-## p values for cx data: ###############################################################
-
-sur_slope <- read.csv(file.path(outDir, str_c("Surrogate_slopes_cxtar_", sigmethod, "_", n, ".csv")), stringsAsFactors = F)
-
-slp_cx <- data.frame()
-
-# 12 month:
-slope_r1 <-  slopes_wpmf[1,1]
-slopes_s1 <- sur_slope %>% filter(slope_surrog <= slope_r1) %>% pull(slope_surrog)
-
-# 10 to 12 month:
-slope_r2 <- slopes_wpmf[1,2]
-slopes_s2 <- sur_slope %>% filter(slope_surrog2 <= slope_r2) %>% pull(slope_surrog)
-
-slp_cx <- data.frame(var_name = c("cx_tar", "cx_tar"),
-                      timescale = c("12", "10to12"), 
-                      obs_slope = c(round(slope_r1, 5), round(slope_r2, 5)), 
-                      p_value = c(round(length(slopes_s1)/length(sur_slope$slope_surrog),3), round(length(slopes_s2)/length(sur_slope$slope_surrog2),3))
-                      ) 
 
 ## summary/p values for env data: ###############################################################
 
@@ -688,13 +697,13 @@ for(e in env){
   slope_r1 <- slopes$real[1]
   slopes_s1 <- slopes$sur$slope_surrog[slopes$sur$slope_surrog <= slope_r1]
   
-  # 10 to 12 month:
+  # 10 to 14 month:
   slope_r2 <- slopes$real[2]
   slopes_s2 <- slopes$sur$slope_surrog2[slopes$sur$slope_surrog2 <= slope_r2]
   
    slp_e <- data.frame(
      var_name = c(e, e),
-     timescale = c("12", "10to12"), 
+     timescale = c("12", "10to14"), 
      obs_slope = c(round(slope_r1, 5), round(slope_r2, 5)), 
      p_value = c(round(length(slopes_s1)/length(slopes$sur$slope_surrog),3),
                  round(length(slopes_s2)/length(slopes$sur$slope_surrog2),3))
@@ -723,8 +732,8 @@ slp_sum12 <- slp_sum %>%
   select(var_name, obs_slope, p_value) %>% 
   unique()
 
-slp_sum10to12 <- rbind(slp_cx, slp_env) %>% 
-  filter(timescale == "10to12") %>% 
+slp_sum10to14 <- rbind(slp_cx, slp_env) %>% 
+  filter(timescale == "10to14") %>% 
   select(var_name, obs_slope, p_value) %>% 
   unique()
 ```
@@ -740,7 +749,7 @@ knitr::kable(slp_sum12, format = "html", table.attr = "style='width:75%;'")
 #### Approx. annual timescale
 
 ```{r echo = F}
-knitr::kable(slp_sum10to12, format = "html", table.attr = "style='width:75%;'")
+knitr::kable(slp_sum10to14, format = "html", table.attr = "style='width:75%;'")
 ```
 
 
