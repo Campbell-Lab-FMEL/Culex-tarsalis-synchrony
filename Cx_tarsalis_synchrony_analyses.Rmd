@@ -63,7 +63,7 @@ cx <- read.csv(file.path(inDir, "cx_tar_16_19_13jan24.csv"), stringsAsFactors = 
 knitr::kable(cx, digits = 4)
 ```
 
-```{r NEON temporal coverage plot, message = F, warning = F, echo = F, eval = T, include = T}
+```{r NEON mmpth timeseries plot, message = F, warning = F, echo = F, eval = T, include = T}
 
 # add temporal context for plotting:
 viz <- data.frame(tBin = seq(1, 48, 1), 
