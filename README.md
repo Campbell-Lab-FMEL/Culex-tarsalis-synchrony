@@ -33,8 +33,11 @@ set.seed(1)
 *Culex tarsalis* data ready for spatial wavelet analyses. Surveillance
 records were binned into continuous monthly bins (`tBin`), and mean
 number of mosquitoes per trap hour per month (mmpth) was calculated for
-each of the included NEON surveillance sites. `NA` values were then
-replaced with `0` in preparation of the analyses.
+each of the included NEON surveillance sites (`data/cx_tar_16_19_including_NAs.csv`).
+Then, we replaced `NA` values with `0` in preparation of the analyses 
+(`data/input/cx_tar_16_19_13jan24.csv`).
+
+<img src="README_files/figure-gfm/NEON mmpth timeseries plot-1.png" style="display: block; margin: auto;" />
 
 | tBin |   CLBJ |   CPER |   KONZ |   MOAB |    OAES |   ONAQ |   SRER |   UKFS |    WOOD |
 |-----:|-------:|-------:|-------:|-------:|--------:|-------:|-------:|-------:|--------:|

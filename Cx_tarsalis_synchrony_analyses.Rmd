@@ -53,14 +53,11 @@ set.seed(1)
 ### *Culex tarsalis* data
 
 *Culex tarsalis* data ready for spatial wavelet analyses.
-Surveillance records were binned into continuous monthly bins (`tBin`), and mean number of mosquitoes per trap hour per month (mmpth) was calculated for each of the included NEON surveillance sites (`data/cx_tar_16_19_including_NAs.csv`). Then, we replaced `NA` values with `0` in preparation of the analyses (`data/input/cx_tar_16_19_13jan24.csv`).
+Surveillance records were binned into continuous monthly bins (`tBin`), and mean number of mosquitoes per trap hour per month (mmpth) was calculated for each of the included NEON surveillance sites (`data/cx_tar_16_19_including_NAs.csv`).
+Then, we replaced `NA` values with `0` in preparation of the analyses (`data/input/cx_tar_16_19_13jan24.csv`).
 
 ```{r load culex data non-transformed, echo = F}
 cx <- read.csv(file.path(inDir, "cx_tar_16_19_13jan24.csv"), stringsAsFactors = F)
-```
-
-```{r print culex data non-transformed, echo = F}
-knitr::kable(cx, digits = 4)
 ```
 
 ```{r NEON mmpth timeseries plot, message = F, warning = F, echo = F, eval = T, include = T}
@@ -103,6 +100,10 @@ ggplot(viz, aes(x = date, y = mmpth, color = siteID, group = siteID)) +
   geom_vline(xintercept = as.numeric(as.Date(paste0(unique(viz$year), "-01-01"))), 
              linetype = "dotted", color = "gray40")
 
+```
+
+```{r print culex data non-transformed, echo = F}
+knitr::kable(cx, digits = 4)
 ```
 
 ### Load and transpose data
@@ -515,7 +516,6 @@ slope_real2 <- out2$coefficients[2]
 slopes_wpmf <- cbind(slope_real, slope_real2)
 ```
 
-
 ```{r, eval = F}
 # generate surrogate data:
 sur <- surrog(dat[[1]],nsurrogs = n,surrtype = sigmethod, syncpres = TRUE) 
@@ -612,7 +612,6 @@ slp_cx <- data.frame(var_name = c("cx_tar", "cx_tar"),
                       p_value = c(round(length(slopes_s1)/length(sur_slope$slope_surrog),3), round(length(slopes_s2)/length(sur_slope$slope_surrog2),3))
                       ) 
 ```
-
 
 ## Environmental slopes:
 
@@ -771,6 +770,3 @@ knitr::kable(slp_sum12, format = "html", table.attr = "style='width:75%;'")
 ```{r echo = F}
 knitr::kable(slp_sum10to14, format = "html", table.attr = "style='width:75%;'")
 ```
-
-
-
