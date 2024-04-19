@@ -31,7 +31,7 @@ library(viridis)
 
 ```{r, echo = F}
 ### SET DIRECTORIES ###
-#getwd()
+# getwd()
 
 # define directories
 workDir <- file.path(".")
@@ -53,8 +53,7 @@ set.seed(1)
 ### *Culex tarsalis* data
 
 *Culex tarsalis* data ready for spatial wavelet analyses.
-Surveillance records were binned into continuous monthly bins (`tBin`), and mean number of mosquitoes per trap hour per month (mmpth) was calculated for each of the included NEON surveillance sites.
-`NA` values were then replaced with `0` in preparation of the analyses.
+Surveillance records were binned into continuous monthly bins (`tBin`), and mean number of mosquitoes per trap hour per month (mmpth) was calculated for each of the included NEON surveillance sites (`data/cx_tar_16_19_including_NAs.csv`). Then, we replaced `NA` values with `0` in preparation of the analyses (`data/input/cx_tar_16_19_13jan24.csv`).
 
 ```{r load culex data non-transformed, echo = F}
 cx <- read.csv(file.path(inDir, "cx_tar_16_19_13jan24.csv"), stringsAsFactors = F)
@@ -64,25 +63,46 @@ cx <- read.csv(file.path(inDir, "cx_tar_16_19_13jan24.csv"), stringsAsFactors = 
 knitr::kable(cx, digits = 4)
 ```
 
-```{r NEON temporal coverage plot, warning = F, echo = F, eval = F, include = F}
-viz <- read.csv(file.path(inDir, "cx_tar_16_21_sites_6to18h_mmpth_tbin_long.csv"), stringsAsFactors = F)
+```{r NEON temporal coverage plot, message = F, warning = F, echo = F, eval = T, include = T}
 
-viz <- viz %>% 
-  filter(tBin >= 4 & tBin <= 48) %>% 
-  filter(!is.na(siteID)) %>% 
+# add temporal context for plotting:
+viz <- data.frame(tBin = seq(1, 48, 1), 
+                   month = rep(seq(1, 12, 1), 4), 
+                   year = sort(rep(seq(2016, 2019, 1), 12))) %>% 
+  inner_join(cx) %>% 
+  pivot_longer(cols = 4:12, 
+               names_to = "siteID", 
+               values_to = "mmpth") %>%  
   mutate(date = as.Date(paste(year, month, "01", sep = "-")))
 
-ggplot(viz, aes(x = date, y = siteID, fill = mmpth)) +
-  geom_tile() +
-  scale_y_discrete(name = "NEON Site") +
+
+# define color palette 
+  # Paul Tol's qualitative color scheme 'muted'
+  # https://personal.sron.nl/~pault/
+col_pal <- c('#CC6677', '#332288', '#117733', '#882255', '#88CCEE', '#44AA99', '#999933', '#AA4499', '#DDCC77')
+
+
+# gradient_plot
+ggplot(viz, aes(x = date, y = mmpth, color = siteID, group = siteID)) +
+  geom_line(linewidth = 0.7, alpha = 0.7) +
   scale_x_date(
-    limits = as.Date(c("2016-04-01", "2019-12-28")), 
-               date_breaks = "2 months", date_labels = "%b %Y") +
-  scale_fill_viridis(option = "H", na.value = "transparent") + #labs(x = "time", y = NULL) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 0)) +
+    name = NULL,
+    limits = as.Date(c("2016-04-01", "2019-12-28")),
+    date_breaks = "2 months", date_labels = "%b %Y",
+    expand = expansion(mult = 0, add = 0)) +
+    theme_minimal() +
+  scale_y_continuous(name = "Monthly mean mosquitoes per trap hour") +
+  #scale_color_viridis(option = "H", na.value = "transparent", discrete = TRUE) +
+  scale_color_manual(name = "NEON Site", values = col_pal) +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.background = element_rect(fill = "gray99", color = "white")
+    ) +
   geom_vline(xintercept = as.numeric(as.Date(paste0(unique(viz$year), "-01-01"))), 
              linetype = "dotted", color = "gray40")
+
 ```
 
 ### Load and transpose data
