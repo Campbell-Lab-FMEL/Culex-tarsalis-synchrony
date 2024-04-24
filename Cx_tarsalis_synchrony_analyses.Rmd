@@ -52,12 +52,10 @@ set.seed(1)
 
 ### *Culex tarsalis* data
 
-*Culex tarsalis* data ready for spatial wavelet analyses.
-Surveillance records were binned into continuous monthly bins (`tBin`), and mean number of mosquitoes per trap hour per month (mmpth) was calculated for each of the included NEON surveillance sites (`data/cx_tar_16_19_including_NAs.csv`).
-Then, we replaced `NA` values with `0` in preparation of the analyses (`data/input/cx_tar_16_19_13jan24.csv`).
+Monthly mean number of *Culex tarsalis* mosquitoes per trap hour (mmpth) were calculated for each of the 9 included NEON surveillance sites (`data/Cx_tarsalis_syn_monthly_mmpth_new.csv`).We then imputed `NA` values with `0` in preparation of the spatial wavelet analyses (`data/input/Cx_tarsalis_syn_monthly_mmpth_new_filled.csv`).
 
 ```{r load culex data non-transformed, echo = F}
-cx <- read.csv(file.path(inDir, "cx_tar_16_19_13jan24.csv"), stringsAsFactors = F)
+cx <- read.csv(file.path(inDir, "Cx_tarsalis_syn_monthly_mmpth_new_filled.csv"), stringsAsFactors = F)
 ```
 
 ```{r NEON mmpth timeseries plot, message = F, warning = F, echo = F, eval = T, include = T}
@@ -115,8 +113,6 @@ env <- c("prec", "tmin", "tmax", "rmin", "rmax")
 
 ### Prepare data for analyses
 
-dat.list <- list() # store all data in this list
-
 # pattern in env. variable data file names
 p <- "_for_wsyn_times_45.csv"
 
@@ -127,18 +123,20 @@ input.files
 ## loop through all files
 # remove unnecessary columns, transpose & save as matrix objects in the dat.list list
 
+dat.list <- list() # store all data in this list
+
 for(f in input.files){
   
   # load data
   d <- read.csv(file.path(inDir, f))
   
   # if file = species data
-  if(str_detect(f, "cx_tar")){
+  if(str_detect(f, "Cx_tar")){
     
     v.name <- "cx_tar"
     
     d1 <- d %>% 
-      arrange(tBin) %>% select(-c(tBin)) %>% t() 
+      arrange(tBin) %>% select(-c(tBin, year, month)) %>% t() 
     
     dat.list[[v.name]] <- d1
   }
@@ -149,7 +147,7 @@ for(f in input.files){
     v.name <- f %>% str_remove(p) %>% word(-1, sep = "_")
 
     d1 <- d %>% 
-      arrange(tBin) %>% select(-c(year, month, tBin)) %>% t() 
+      arrange(tBin) %>% select(-c(tBin, year, month)) %>% t() 
     
     dat.list[[v.name]] <- d1
   }
@@ -166,7 +164,7 @@ for(f in input.files){
 ```
 
 ```{r, echo = F}
-rm(list = c("d", "d1", "dat.list", "p"))
+rm(list = c("d", "d1", "dat.list", "p", "dat"))
 ```
 
 ### Prepare for synchrony analyses
@@ -266,7 +264,7 @@ resp <- 1         # index of response variable
 pred <- 2:6       # index of predictor variable
 norm <- "powall"  # normalization of wavelet transforms to use
 
-## wsyn::wlmtest()
+## wsyn::wlmtest() - wlmtest(wlmobj, drop, sigmethod, nrand)
 n <- 10000        # nrand
 
 ## wsyn::bandtest() 
@@ -308,6 +306,8 @@ for(p in pred){
 
 ```
 
+The results of the assessment are shown on the tabs below. Tabs 2-6 contain the `plotrank` output for each of the 5 environmental variables, which  help identify statistical significance of coherence (see `?wsyn::plotrank()` for more information).
+
 ## p-value summary
 
 ```{r, echo = F}
@@ -343,7 +343,7 @@ env.sig <- read.csv(file.path(outDir, str_c("cxtar_wsyn45_wlmtest", sigmethod, n
 env.sig <- env.sig %>% 
   mutate(p_value = round(p_value, 4))
 
-knitr::kable(env.sig, format = "html", table.attr = "style='width:75%;'")
+knitr::kable(env.sig, format = "html", table.attr = "style='width:75%;'", align = "lccc")
 ```
 
 ```{r echo = F}
@@ -585,7 +585,7 @@ h2b <- ggplot(sur_slope, aes(slope_surrog2))+
                                   round(length(slopes_s2)/length(sur_slope$slope_surrog2), 3))
                      )+
   scale_y_continuous(name = NULL) +
-  labs(subtitle="Approx. annual (10 to 14 month avg.) timescale") +
+  labs(subtitle="10 to 14 month avg. timescale") +
   theme_bw() +
   theme(axis.title.x = element_text(colour=ifelse(length(slopes_s2)/length(sur_slope$slope_surrog2) < 0.1, "red4", "black")))
 
